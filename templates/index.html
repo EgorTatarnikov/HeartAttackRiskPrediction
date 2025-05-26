@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>Загрузка CSV для предсказания</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
+</head>
+<body class="bg-gray-50 min-h-screen flex items-center justify-center px-4">
+  <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-xl">
+    <h1 class="text-3xl font-semibold mb-6 text-center text-gray-800">
+      Предсказание рисков сердечного приступа
+    </h1>
+
+    <!-- Блок для красивого предупреждения -->
+    <div id="warning" class="hidden mb-4 p-4 rounded-lg bg-yellow-100 text-yellow-800 text-sm flex items-start space-x-2">
+      <svg class="w-5 h-5 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 100 20 10 10 0 000-20z"/>
+      </svg>
+      <span>Пожалуйста, выберите CSV-файл перед отправкой.</span>
+    </div>
+
+    <form id="predict-form" class="space-y-6" enctype="multipart/form-data">
+      <div>
+        <label class="block mb-2 text-sm font-medium text-gray-700">Выберите CSV-файл</label>
+        <input type="file" name="file" id="file" accept=".csv" required
+               class="block w-full border border-gray-300 p-2 rounded" />
+      </div>
+
+      <input type="hidden" name="response_format" id="response_format" value="csv" />
+
+      <div class="flex space-x-4">
+        <button type="submit"
+                onclick="event.preventDefault(); submitForm('csv');"
+                class="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition">
+          Скачать CSV
+        </button>
+        <button type="submit"
+                id="json-button"
+                onclick="event.preventDefault(); submitForm('json');"
+                class="flex-1 bg-green-600 text-white py-2 rounded hover:bg-green-700 transition">
+          Показать JSON
+        </button>
+      </div>
+    </form>
+
+    <div id="json-output"
+         class="mt-6 bg-gray-100 p-4 rounded hidden whitespace-pre-wrap text-sm text-gray-800"></div>
+  </div>
+
+<script>
+    async function submitForm(format) {
+      const fileInput = document.getElementById('file');
+      const file = fileInput.files[0];
+      const warning = document.getElementById('warning');
+      const output = document.getElementById('json-output');
+
+      warning.classList.add('hidden');
+      output.classList.add('hidden');
+      output.textContent = "";
+
+      if (!file) {
+        warning.classList.remove('hidden');
+        setTimeout(() => warning.classList.add('hidden'), 4000);
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('response_format', format);
+
+      try {
+        const response = await fetch('/predict/', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!response.ok) {
+          const text = await response.text();
+          output.textContent = "Ошибка сервера: " + text;
+          output.classList.remove('hidden');
+          return;
+        }
+
+        if (format === 'csv') {
+          // Получаем CSV и скачиваем
+          const blob = await response.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'tatarnikov_results.csv';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        } else {
+          // Формат JSON
+          const text = await response.text();
+          try {
+            const json = JSON.parse(text);
+            output.textContent = JSON.stringify(json.result, null, 2);
+          } catch (err) {
+            output.textContent = "Ошибка парсинга JSON: " + err.message + "\nОтвет сервера:\n" + text;
+          }
+          output.classList.remove('hidden');
+        }
+
+      } catch (error) {
+        output.textContent = "Ошибка при отправке запроса: " + error.message;
+        output.classList.remove('hidden');
+      }
+    }
+</script>
+<script>
+  document.getElementById("json-button").addEventListener("click", function () {
+    const form = document.getElementById("predict-form");
+    form.action = "/show_json/";
+  });
+</script>
+</body>
+</html>
